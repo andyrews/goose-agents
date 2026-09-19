@@ -1,0 +1,67 @@
+# Project: Example Service
+
+This is a small Python FastAPI service. When working in this repo:
+
+- Python 3.11, dependencies managed with `uv` / `pyproject.toml`.
+- Tests live in `tests/`, run with `pytest -q`.
+- Follow the existing code style; do not reformat unrelated files.
+- Never commit directly to `main` — open a PR.
+- Config lives in `config/*.yaml`, not environment variables, except secrets.
+
+## Available recipes ("agents") for this project
+
+See `recipes/` for pre-built task agents. Point Goose at this folder with:
+
+    export GOOSE_RECIPE_PATH="$(pwd)/recipes"      # bash/zsh
+    $env:GOOSE_RECIPE_PATH = "$PWD\recipes"         # PowerShell
+
+**Headless runs (`goose run --recipe ...`) also need `GOOSE_MODE=auto`.**
+`goose run` has no terminal to answer approval prompts, so if `GOOSE_MODE`
+is `approve` or `smart_approve` (check `config.yaml`), a tool call can
+hard-fail with "Tool approval required in non-interactive mode" instead
+of running. Set it per-invocation:
+
+    export GOOSE_MODE=auto        # bash/zsh
+    $env:GOOSE_MODE = "auto"      # PowerShell
+
+Recipes shipped here:
+- `code-reviewer.yaml` — reviews a file or directory against this project's
+  conventions (the ones listed above) and reports findings without editing.
+- `doc-writer.yaml` — drafts or updates docstrings for a given file.
+
+New agents get added the same way as before: someone adds a `.yaml` file
+under `recipes/`, updates this list if relevant, and pushes. Pull, rerun
+`install.sh` / `install.ps1` if dependencies changed, and the new recipe
+is available via `goose run --recipe <name>.yaml`.
+
+## Known gpt-oss:20b + Ollama gotcha
+
+`gpt-oss` models separate internal reasoning from their final answer
+("harmony" format). On long tool-calling turns, the model can spend its
+whole token budget on internal reasoning and return an **empty final
+answer** even though it clearly did work (tool calls all succeeded, but
+no summary text ever appears). Two things help:
+
+    $env:OLLAMA_CONTEXT_LENGTH = "16384"     # raise Ollama's context window
+    ollama serve
+
+...and explicitly instructing the recipe to stop and summarize once it has
+enough information, rather than assuming it'll do so on its own (see
+`code-reviewer.yaml`'s instructions for an example of that phrasing).
+
+## Known tool-name hallucination
+
+The model will sometimes call `read_file` or `read` to read a file --
+neither exists in this environment. The Developer extension's actual
+file-reading/writing tool is **`text_editor`**, used with a `command`
+argument: `{"command": "view", "path": "..."}` to read,
+`{"command": "write", ...}` or `{"command": "str_replace", ...}` to edit.
+Calling a nonexistent tool name fails with:
+
+    -32600: Tool 'read_file' was not advertised for this model turn
+
+If this keeps happening even after the recipe instructs the model to use
+`text_editor`, check `config.yaml`'s `extensions.developer.available_tools`
+-- an empty/restrictive allow-list there can filter `text_editor` out of
+what's actually advertised to the model, independent of what the prompt says.
+

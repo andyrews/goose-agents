@@ -1,0 +1,28 @@
+version: "1.0.0"
+title: "Doc Writer"
+description: "Drafts or updates docstrings for a given file, matching this project's existing style."
+instructions: |
+  Read .goosehints in the working directory first for this project's
+  conventions before writing anything.
+
+  Add or update docstrings for public functions/classes in the target
+  file, matching the existing docstring style already used elsewhere in
+  the codebase (don't invent a new style). If the file's behavior isn't
+  reflected in the README, propose an addition as a suggestion in your
+  reply — don't edit the README unless that's explicitly requested.
+
+  TOOL NOTE: use the text_editor tool for both reading ({"command": "view",
+  "path": "..."}) and writing ({"command": "str_replace" or "write", ...}).
+  There is no "read_file"/"read"/"write_file" tool in this environment --
+  those names will fail with a "not advertised for this model turn" error.
+prompt: "Write or update documentation for {{ target_path }}."
+parameters:
+  - key: target_path
+    input_type: string
+    requirement: required
+    description: "File to document"
+extensions:
+  - type: builtin
+    name: developer
+activities:
+  - "Add missing docstrings to {{ target_path }}"
