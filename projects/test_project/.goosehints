@@ -40,28 +40,46 @@ is available via `goose run --recipe <name>.yaml`.
 ("harmony" format). On long tool-calling turns, the model can spend its
 whole token budget on internal reasoning and return an **empty final
 answer** even though it clearly did work (tool calls all succeeded, but
-no summary text ever appears). Two things help:
+no summary text ever appears), or hit an output-token limit warning
+mid-response. Three things help, roughly in order of how directly they
+address the root cause:
 
-    $env:OLLAMA_CONTEXT_LENGTH = "16384"     # raise Ollama's context window
-    ollama serve
+1. **Lower reasoning effort.** gpt-oss reads a `Reasoning: low/medium/high`
+   directive out of the system prompt content (confirmed from OpenAI's own
+   model card) -- both recipes here start their `instructions:` with
+   `Reasoning: low` for exactly this reason. Ollama also has a native
+   `think` parameter (`ollama run gpt-oss --think=low`), but whether Goose
+   passes that through isn't confirmed, so the system-prompt directive is
+   the safer bet.
+2. Raise Ollama's context window: `$env:OLLAMA_CONTEXT_LENGTH = "16384"`
+   before `ollama serve`.
+3. Explicitly instruct the recipe to stop and summarize once it has enough
+   information (see the "IMPORTANT" note in `code-reviewer.yaml`).
 
-...and explicitly instructing the recipe to stop and summarize once it has
-enough information, rather than assuming it'll do so on its own (see
-`code-reviewer.yaml`'s instructions for an example of that phrasing).
+## Known tool-name hallucination / version drift
 
-## Known tool-name hallucination
+The model will sometimes call `read_file`, `read`, or `text_editor` to
+read a file -- none of these exist in this Goose build. **The actual tool
+set is version-dependent**: the public Developer-extension docs
+(https://block.github.io/goose/docs/mcp/developer-mcp/) list
+`shell`/`text_editor`/`analyze`, but this project's real, observed tool
+set is **`shell`, `write`, `edit`, `tree`, `read_image`** -- confirmed
+directly from this environment, not from the docs. Notably there is **no
+dedicated read tool at all**; `tree` only lists structure and
+`read_image` only handles images, so the *only* way to read a text
+file's contents here is the shell tool.
 
-The model will sometimes call `read_file` or `read` to read a file --
-neither exists in this environment. The Developer extension's actual
-file-reading/writing tool is **`text_editor`**, used with a `command`
-argument: `{"command": "view", "path": "..."}` to read,
-`{"command": "write", ...}` or `{"command": "str_replace", ...}` to edit.
 Calling a nonexistent tool name fails with:
 
     -32600: Tool 'read_file' was not advertised for this model turn
 
-If this keeps happening even after the recipe instructs the model to use
-`text_editor`, check `config.yaml`'s `extensions.developer.available_tools`
--- an empty/restrictive allow-list there can filter `text_editor` out of
-what's actually advertised to the model, independent of what the prompt says.
+If your Goose updates and this list changes again, don't trust either
+list (this note or the public docs) blindly -- check what's actually
+advertised in a live session and update the recipes' TOOL NOTE sections.
+
+If the model falls back to the shell tool, make sure it's told to invoke
+PowerShell explicitly (`powershell -Command "Get-Content -Path '<path>'
+-Raw"`) rather than bare `cmd.exe` builtins like `type` or Unix commands
+like `sed`/`cat` -- both are unreliable or absent on Windows, especially
+with forward-slash paths.
 

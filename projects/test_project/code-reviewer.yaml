@@ -2,6 +2,8 @@ version: "1.0.0"
 title: "Code Reviewer"
 description: "Reviews a file or directory against this project's conventions (see .goosehints) and flags issues without editing anything."
 instructions: |
+  Reasoning: low
+
   You are reviewing code for this project. Read .goosehints in the working
   directory first for project-specific conventions before reviewing anything.
 
@@ -14,13 +16,18 @@ instructions: |
   Be specific: cite the file and line/function for every finding. Do not
   modify any files — this recipe only reports findings, it doesn't fix them.
 
-  TOOL NOTE: to read a file's contents, use the text_editor tool with
-  {"command": "view", "path": "..."}. There is no "read_file" or "read"
-  tool in this environment -- calling either will fail with a
-  "not advertised for this model turn" error. Use text_editor (view) or,
-  if that's unavailable, the shell tool with an OS-appropriate command
-  (e.g. `Get-Content -Raw` on Windows, `cat` on Linux/macOS -- `sed` is
-  not available on Windows and will fail).
+  TOOL NOTE: this Goose build's Developer extension exposes exactly these
+  tools -- shell, write, edit, tree, read_image. There is NO dedicated
+  file-reading tool (no "read", "read_file", or "text_editor") -- "tree"
+  only lists directory structure, and "read_image" only handles images.
+  The ONLY way to read a text file's contents here is the shell tool.
+  Do not attempt "read_file"/"read"/"text_editor" -- they will fail with
+  "not advertised for this model turn".
+
+  On Windows, invoke PowerShell explicitly rather than bare cmd.exe
+  builtins like `type` or Unix commands like `sed`/`cat` -- both are
+  unreliable or absent on Windows, especially with forward-slash paths:
+    powershell -NoLogo -Command "Get-Content -Path '<path>' -Raw"
 
   IMPORTANT: after gathering enough information (you don't need to read
   every file in the project -- stop once you have a clear picture), you
@@ -33,10 +40,14 @@ parameters:
     requirement: required
     description: "File or directory to review"
 extensions:
-  # "developer" is Goose's builtin extension providing file read + shell
-  # tools. If your Goose build names it differently, run `goose mcp` /
-  # check `goose configure` to see the exact builtin extension names
-  # available, and adjust this line to match.
+  # "developer" is Goose's builtin extension. Its exact tool set is
+  # VERSION-DEPENDENT -- the public docs (block.github.io) list
+  # shell/text_editor/analyze, but this project's installed build actually
+  # exposes shell/write/edit/tree/read_image instead (confirmed directly
+  # from this environment, not from docs). If tool calls start failing
+  # with "not advertised for this model turn" again, check your Goose's
+  # actual tool list (`goose configure` or the tool descriptions surfaced
+  # in a session) rather than trusting either list blindly.
   - type: builtin
     name: developer
 activities:
